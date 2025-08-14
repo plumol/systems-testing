@@ -1,8 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from quixstreams import Application
 
 import time
 import os
+import json
+
+kakfa_app = Application(
+    broker_address='localhost:9092',
+    loglevel='DEBUG',
+)
 
 app = FastAPI()
 
@@ -18,6 +25,17 @@ class SensorEvent(BaseModel):
 async def get_ingest(evt: SensorEvent):
     payload = evt.model_dump()
     payload['received_ts'] = time.time()
+    
+    try:
+        with kakfa_app.get_producer() as producer:
+
+            producer.produce(
+                topic='sensor_events',
+                value=json.dumps(payload)
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {'status': 'ok'}
 
